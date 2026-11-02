@@ -103,8 +103,15 @@ a { color: var(--accent); }
 @media (prefers-reduced-motion: no-preference) { .verdict { transition: background-color .2s; } }
 </style>
 <style>
+.cam { position: relative; width: 100%; border-radius: 12px; overflow: hidden; background: #000; aspect-ratio: 4 / 3; }
+.cam video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cam .frame { position: absolute; left: 8%; right: 8%; top: 32%; bottom: 32%; border: 3px solid rgba(255,255,255,.9); border-radius: 10px; box-shadow: 0 0 0 999px rgba(0,0,0,.35); pointer-events: none; }
+.cam .frame::after { content: ""; position: absolute; left: 6%; right: 6%; top: 50%; height: 2px; background: #ff5a4f; }
 #reader { width: 100%; border-radius: 12px; overflow: hidden; background: #000; }
 #reader video { width: 100% !important; display: block; }
+.cam-tools { display: flex; gap: 10px; flex-wrap: wrap; }
+.cam-tools .btn { flex: 1 1 auto; }
+.btn.on { background: var(--accent); color: var(--accent-ink); }
 .code-row { display: flex; gap: 10px; }
 .code-row input { flex: 1; font-variant-numeric: tabular-nums; }
 .product { display: flex; flex-direction: row; gap: 12px; align-items: center; }
@@ -112,7 +119,11 @@ a { color: var(--accent); }
 .product .meta { display: flex; flex-direction: column; }
 .product small { color: var(--muted); font-variant-numeric: tabular-nums; }
 .ingr { font-size: .92rem; color: var(--muted); margin: 0; }
+.source { font-size: .85rem; color: var(--muted); margin: 0; }
 details.panel summary { cursor: pointer; font-family: var(--font-display); font-weight: 700; font-size: 1.2rem; }
+.progress { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; }
+.progress > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.v-leer .row { margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -123,11 +134,22 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
   </header>
 
   <section class="panel" aria-labelledby="h-scan">
-    <h2 id="h-scan">Produkt scannen</h2>
+    <h2 id="h-scan">Produkt prüfen</h2>
     <button class="btn primary big" id="scanBtn" type="button">Strichcode scannen</button>
+    <div class="cam" id="cam" hidden><video id="video" playsinline muted></video><div class="frame"></div></div>
     <div id="reader" hidden></div>
-    <button class="btn ghost" id="stopBtn" type="button" hidden>Scanner schliessen</button>
-    <p class="hint" id="scanHint">Die Kamera öffnet sich. Halte den Strichcode ruhig in den Rahmen.</p>
+    <div class="cam-tools" id="camTools" hidden>
+      <button class="btn ghost" id="torchBtn" type="button" hidden>Licht an</button>
+      <button class="btn ghost" id="zoomBtn" type="button" hidden>Zoom 2×</button>
+      <button class="btn ghost" id="stopBtn" type="button">Schliessen</button>
+    </div>
+    <p class="hint" id="scanHint">Strichcode waagrecht in den Rahmen halten, etwa 10 bis 15 cm Abstand. Bei wenig Licht «Licht an» tippen.</p>
+    <div class="row">
+      <label class="btn ghost" for="barcodeFoto" style="flex:1">Strichcode fotografieren</label>
+      <label class="btn ghost" for="ocrFoto" style="flex:1">Zutatenliste fotografieren</label>
+    </div>
+    <input class="sr-only" type="file" id="barcodeFoto" accept="image/*" capture="environment">
+    <input class="sr-only" type="file" id="ocrFoto" accept="image/*" capture="environment">
     <label class="field" for="ean">Oder Nummer unter dem Strichcode eintippen
       <span class="code-row">
         <input type="text" id="ean" inputmode="numeric" autocomplete="off" placeholder="z. B. 8717163813706">
@@ -139,8 +161,8 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
   <section id="ergebnis" aria-live="polite" style="display:flex;flex-direction:column;gap:12px"></section>
 
   <details class="panel" id="manuell">
-    <summary>Zutaten selbst eingeben</summary>
-    <p class="hint">Falls ein Produkt nicht gefunden wird oder die Angaben unvollständig sind.</p>
+    <summary>Zutaten selbst eingeben oder korrigieren</summary>
+    <p class="hint" id="pendingHint">Falls ein Produkt nicht gefunden wird oder die Angaben unvollständig sind.</p>
     <label class="field" for="produkt">Produkt
       <input type="text" id="produkt" placeholder="z. B. Knorr Gemüse-Bouillon">
     </label>
@@ -161,6 +183,18 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
     <ul class="hist" id="verlauf"></ul>
   </section>
 
+  <details class="panel" id="teilen">
+    <summary>Eigene Produkte teilen</summary>
+    <p class="hint" id="eigeneInfo"></p>
+    <p class="hint">So bekommt das andere Handy deine selbst erfassten Produkte: «Liste kopieren» tippen, per WhatsApp schicken, dort den Text unten einfügen und «Liste übernehmen» tippen.</p>
+    <textarea id="teilenText" aria-label="Produktliste zum Teilen" placeholder="Hier die kopierte Liste einfügen"></textarea>
+    <div class="row">
+      <button class="btn primary" id="kopieren" type="button">Liste kopieren</button>
+      <button class="btn ghost" id="uebernehmen" type="button">Liste übernehmen</button>
+    </div>
+    <p class="hint" id="teilenStatus"></p>
+  </details>
+
   <section class="panel" aria-labelledby="h-regeln">
     <h2 id="h-regeln">Was geprüft wird</h2>
     <div class="rules" id="regeln"></div>
@@ -168,12 +202,12 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
 
   <footer>
     <p>Kein Ersatz für ärztliche Beratung oder Ernährungsberatung. Die Verträglichkeit ist individuell. Geprüft wird nur die Zutatenliste.</p>
-    <p>Produktdaten: <a href="https://openfoodfacts.org">Open Food Facts</a>, von Freiwilligen erfasst. Bitte im Zweifel mit der Packung vergleichen.</p>
+    <p>Produktdaten: <a href="https://openfoodfacts.org">Open Food Facts</a>, von Freiwilligen erfasst. Texterkennung: Tesseract, läuft direkt auf dem Handy. Bitte im Zweifel mit der Packung vergleichen.</p>
     <p>Grundlagen: <a href="https://discovery.dundee.ac.uk/ws/files/153439865/jjaf122.pdf">ECCO-Konsensus Ernährung bei CED (2025)</a>, IOIBD-Empfehlungen zu Zusatzstoffen, <a href="https://community.the-hospitalist.org/content/dietary-trial-shows-benefits-low-emulsifier-diet-crohns-disease">ADDapt-Studie zu Emulgatoren</a>.</p>
+    <p>Version 2</p>
   </footer>
 </main>
 
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 (function () {
   "use strict";
@@ -315,6 +349,24 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
   // ---------- Hilfen ----------
   const $ = function (id) { return document.getElementById(id); };
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]; }); }
+  function toTop() { $("ergebnis").scrollIntoView({ behavior: "smooth", block: "start" }); }
+  function loadScript(src) {
+    return new Promise(function (res, rej) {
+      if (document.querySelector('script[src="' + src + '"]')) { res(); return; }
+      const s = document.createElement("script"); s.src = src; s.onload = function () { res(); }; s.onerror = function () { rej(new Error("load " + src)); };
+      document.head.appendChild(s);
+    });
+  }
+  const LIB_SCAN = "https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js";
+  const LIB_OCR = "https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js";
+
+  function validGTIN(code) {
+    if (!/^\d{8}$|^\d{12,14}$/.test(code)) return false;
+    const d = code.split("").map(Number), check = d.pop();
+    let sum = 0;
+    d.reverse().forEach(function (n, i) { sum += n * (i % 2 === 0 ? 3 : 1); });
+    return (10 - (sum % 10)) % 10 === check;
+  }
 
   const VERDICT = {
     gruen: { cls: "v-gruen", tag: "Passt", text: "Keine Zusatzstoffe oder Zutaten gefunden, die bei Colitis ulcerosa gemieden oder eingeschränkt werden sollten." },
@@ -322,7 +374,7 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
     rot: { cls: "v-rot", tag: "Meiden", text: "Enthält Zusatzstoffe, die nach aktuellen Empfehlungen gemieden werden sollten. Besser ein anderes Produkt wählen." }
   };
 
-  // item: {name, brand, code, image, text, extra}
+  // item: {name, brand, code, image, text, extra, source}
   function render(item) {
     const out = $("ergebnis");
     const full = (item.text || "") + (item.extra ? "\n" + item.extra : "");
@@ -338,6 +390,7 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
     }
     html += '<div class="verdict ' + v.cls + '"><span class="tag">' + v.tag + '</span>' +
       (!item.code && item.name ? '<span class="what">' + esc(item.name) + '</span>' : '') + '<p>' + v.text + '</p></div>';
+    if (item.source) html += '<p class="source">' + esc(item.source) + '</p>';
     const main = res.found.filter(function (f) { return f.rule.level !== "info"; });
     const info = res.found.filter(function (f) { return f.rule.level === "info"; });
     function list(items) {
@@ -351,7 +404,7 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
     if (main.length) html += '<h2>Gefunden</h2>' + list(main);
     if (info.length) html += '<h2>Gut zu wissen</h2>' + list(info);
     if (item.text) html += '<div class="panel"><h3>Zutaten</h3><p class="ingr">' + esc(item.text) + '</p></div>';
-    else if (item.code) html += '<p class="hint">In der Datenbank fehlt die Zutatenliste, bewertet wurden nur die erfassten Zusatzstoffe. Für ein vollständiges Ergebnis die Zutaten unten selbst eingeben.</p>';
+    else if (item.code) html += '<p class="hint">In der Datenbank fehlt die Zutatenliste, bewertet wurden nur die erfassten Zusatzstoffe. Für ein vollständiges Ergebnis die Zutatenliste fotografieren.</p>';
     out.innerHTML = html;
     return res.verdict;
   }
@@ -359,20 +412,26 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
   function message(title, text, extraHtml) {
     $("ergebnis").innerHTML = '<div class="verdict v-leer"><span class="tag" style="font-size:1.25rem">' + esc(title) + '</span><p>' + esc(text) + '</p>' + (extraHtml || "") + '</div>';
   }
+  const FALLBACK_BTNS = '<div class="row"><label class="btn primary" for="ocrFoto" style="flex:1">Zutatenliste fotografieren</label><button class="btn ghost" type="button" data-act="manuell" style="flex:1">Selbst eingeben</button></div>';
+  $("ergebnis").addEventListener("click", function (ev) {
+    const b = ev.target.closest('[data-act="manuell"]');
+    if (b) { $("manuell").open = true; $("zutaten").focus(); }
+  });
 
-  // ---------- Verlauf ----------
-  const KEY = "cu-check-verlauf";
-  function loadHist() { try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (e) { return []; } }
-  function saveHist(arr) { try { localStorage.setItem(KEY, JSON.stringify(arr.slice(0, 60))); } catch (e) { /* ohne Speicher weiter */ } }
+  // ---------- Speicher ----------
+  function load(key, def) { try { const v = JSON.parse(localStorage.getItem(key)); return v == null ? def : v; } catch (e) { return def; } }
+  function store(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { /* ohne Speicher weiter */ } }
+  const KEY_HIST = "cu-check-verlauf", KEY_OWN = "cu-check-eigene";
+
   function addHist(item, verdict) {
     const id = item.code || item.text;
-    const arr = loadHist().filter(function (h) { return (h.code || h.text) !== id; });
+    const arr = load(KEY_HIST, []).filter(function (h) { return (h.code || h.text) !== id; });
     arr.unshift({ name: item.name || "Ohne Namen", brand: item.brand || "", code: item.code || "", image: item.image || "", text: item.text || "", extra: item.extra || "", verdict: verdict, date: new Date().toISOString() });
-    saveHist(arr);
+    store(KEY_HIST, arr.slice(0, 60));
     renderHist();
   }
   function renderHist() {
-    const arr = loadHist();
+    const arr = load(KEY_HIST, []);
     const ul = $("verlauf");
     $("verlaufLeeren").hidden = arr.length === 0;
     if (!arr.length) { ul.innerHTML = '<li class="hint">Geprüfte Produkte erscheinen hier. Gespeichert wird nur auf diesem Handy.</li>'; return; }
@@ -386,12 +445,49 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
   $("verlauf").addEventListener("click", function (ev) {
     const b = ev.target.closest(".hist-item");
     if (!b) return;
-    const h = loadHist()[Number(b.dataset.i)];
-    if (!h) return;
-    render(h);
-    $("ergebnis").scrollIntoView({ behavior: "smooth", block: "start" });
+    const h = load(KEY_HIST, [])[Number(b.dataset.i)];
+    if (h) { render(h); toTop(); }
   });
-  $("verlaufLeeren").addEventListener("click", function () { saveHist([]); renderHist(); });
+  $("verlaufLeeren").addEventListener("click", function () { store(KEY_HIST, []); renderHist(); });
+
+  function saveOwn(item) {
+    if (!item.code) return;
+    const own = load(KEY_OWN, {});
+    own[item.code] = { name: item.name || "", brand: item.brand || "", text: item.text || "", date: new Date().toISOString() };
+    store(KEY_OWN, own);
+    renderOwnInfo();
+  }
+  function renderOwnInfo() {
+    const n = Object.keys(load(KEY_OWN, {})).length;
+    $("eigeneInfo").textContent = n ? n + (n === 1 ? " Produkt" : " Produkte") + " selbst erfasst. Sie werden beim nächsten Scan sofort erkannt." : "Noch keine eigenen Produkte. Wenn ein Strichcode nicht in der Datenbank ist und du die Zutaten fotografierst oder eintippst, merkt sich die App das Produkt.";
+  }
+  $("kopieren").addEventListener("click", async function () {
+    const txt = "CU-CHECK:" + JSON.stringify(load(KEY_OWN, {}));
+    $("teilenText").value = txt;
+    try { await navigator.clipboard.writeText(txt); $("teilenStatus").textContent = "Liste kopiert. Jetzt per WhatsApp oder SMS schicken."; }
+    catch (e) { $("teilenText").select(); $("teilenStatus").textContent = "Text ist markiert. Bitte lange drücken und «Kopieren» wählen."; }
+  });
+  $("uebernehmen").addEventListener("click", function () {
+    const raw = $("teilenText").value.trim();
+    const i = raw.indexOf("CU-CHECK:");
+    try {
+      if (i < 0) throw new Error("kein Marker");
+      const data = JSON.parse(raw.slice(i + 9));
+      const own = load(KEY_OWN, {});
+      let n = 0;
+      Object.keys(data).forEach(function (code) {
+        if (/^\d{8,14}$/.test(code) && data[code] && typeof data[code].text === "string") {
+          const cur = own[code];
+          if (!cur || (data[code].date || "") > (cur.date || "")) { own[code] = data[code]; n++; }
+        }
+      });
+      store(KEY_OWN, own); renderOwnInfo();
+      $("teilenStatus").textContent = n + (n === 1 ? " Produkt" : " Produkte") + " übernommen.";
+      $("teilenText").value = "";
+    } catch (e) {
+      $("teilenStatus").textContent = "Das sieht nicht nach einer kopierten Liste aus. Bitte den ganzen Text einfügen, er beginnt mit «CU-CHECK:».";
+    }
+  });
 
   // ---------- Regelübersicht ----------
   $("regeln").innerHTML = RULES.filter(function (r) { return !r.fallback; }).map(function (r) {
@@ -402,12 +498,29 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
       '</strong><span class="desc">' + esc(r.why) + '</span></div>';
   }).join("");
 
-  // ---------- Open Food Facts ----------
+  // ---------- Suche ----------
+  let pendingCode = "";
+  function setPending(code, name) {
+    pendingCode = code || "";
+    $("pendingHint").textContent = pendingCode
+      ? "Das Ergebnis wird unter Strichcode " + pendingCode + " gespeichert und beim nächsten Scan sofort erkannt."
+      : "Falls ein Produkt nicht gefunden wird oder die Angaben unvollständig sind.";
+    if (name !== undefined) $("produkt").value = name;
+  }
+
   const FIELDS = "code,product_name,product_name_de,product_name_fr,brands,ingredients_text_de,ingredients_text_fr,ingredients_text_it,ingredients_text,additives_tags,image_front_small_url";
 
   async function lookup(code) {
     code = String(code).replace(/\D/g, "");
     if (code.length < 8) { message("Nummer unvollständig", "Bitte die ganze Nummer unter dem Strichcode eingeben (8 oder 13 Ziffern)."); return; }
+    $("ean").value = code;
+    setPending("");
+    const own = load(KEY_OWN, {})[code];
+    if (own && own.text) {
+      const item = { name: own.name, brand: own.brand, code: code, text: own.text, source: "Aus euren selbst erfassten Produkten." };
+      const v = render(item); if (v) addHist(item, v);
+      return;
+    }
     message("Suche läuft", "Produkt " + code + " wird in der Datenbank gesucht.");
     let j;
     try {
@@ -416,14 +529,14 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
       else if (!r.ok) throw new Error("HTTP " + r.status);
       else j = await r.json();
     } catch (e) {
-      message("Keine Verbindung", "Die Produktdatenbank ist gerade nicht erreichbar. Bitte Internetverbindung prüfen oder die Zutaten unten selbst eingeben.");
+      setPending(code, "");
+      message("Keine Verbindung", "Die Produktdatenbank ist gerade nicht erreichbar. Du kannst die Zutatenliste fotografieren, das funktioniert auch ohne Datenbank.", FALLBACK_BTNS);
       return;
     }
     if (!j || j.status !== 1 || !j.product) {
-      $("produkt").value = "";
-      $("manuell").open = true;
-      message("Produkt nicht gefunden", "Nummer " + code + " ist noch nicht in Open Food Facts erfasst. Gib die Zutaten unten selbst ein.",
-        '<p><a href="https://world.openfoodfacts.org/product/' + esc(code) + '">Produkt bei Open Food Facts erfassen</a> (hilft allen Nutzern)</p>');
+      setPending(code, "");
+      message("Nicht in der Datenbank", "Nummer " + code + " ist bei Open Food Facts noch nicht erfasst. Fotografiere die Zutatenliste, dann merkt sich die App das Produkt.",
+        FALLBACK_BTNS + '<p><a href="https://world.openfoodfacts.org/product/' + esc(code) + '">Produkt bei Open Food Facts erfassen</a> (hilft allen Nutzern)</p>');
       return;
     }
     const p = j.product;
@@ -435,76 +548,251 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
     const item = {
       name: p.product_name_de || p.product_name || p.product_name_fr || "",
       brand: (p.brands || "").split(",")[0].trim(),
-      code: code, image: p.image_front_small_url || "", text: text, extra: extra
+      code: code, image: p.image_front_small_url || "", text: text, extra: extra,
+      source: "Quelle: Open Food Facts. Bitte im Zweifel mit der Packung vergleichen."
     };
-    if (!text && !extra) {
-      $("produkt").value = item.name;
-      $("manuell").open = true;
-      message("Zutaten fehlen", (item.name ? item.name + ": " : "") + "Das Produkt ist erfasst, aber ohne Zutatenliste. Bitte die Zutaten unten selbst eingeben.",
-        '<p><a href="https://world.openfoodfacts.org/product/' + esc(code) + '">Zutaten bei Open Food Facts ergänzen</a></p>');
-      return;
+    if (!text) {
+      setPending(code, item.name);
+      if (!extra) {
+        message("Zutaten fehlen", (item.name ? item.name + ": " : "") + "Das Produkt ist erfasst, aber ohne Zutatenliste. Fotografiere sie, dann merkt sich die App das Produkt.", FALLBACK_BTNS);
+        return;
+      }
     }
     const v = render(item);
     if (v) addHist(item, v);
+    if (!text) $("ergebnis").insertAdjacentHTML("beforeend", FALLBACK_BTNS);
   }
 
   $("eanBtn").addEventListener("click", function () { lookup($("ean").value); });
   $("ean").addEventListener("keydown", function (e) { if (e.key === "Enter") lookup($("ean").value); });
 
   // ---------- Scanner ----------
-  let scanner = null, scanning = false;
-  async function stopScan() {
-    if (scanner && scanning) { try { await scanner.stop(); } catch (e) { /* schon gestoppt */ } }
-    scanning = false;
-    $("reader").hidden = true; $("stopBtn").hidden = true; $("scanBtn").hidden = false;
+  let stream = null, track = null, scanning = false, mode = "", h5 = null, zoomed = false, torchOn = false;
+  let lastCode = "", sameCount = 0;
+
+  function camUI(on) {
+    $("scanBtn").hidden = on; $("camTools").hidden = !on;
+    if (!on) { $("cam").hidden = true; $("reader").hidden = true; $("torchBtn").hidden = true; $("zoomBtn").hidden = true; }
   }
-  $("stopBtn").addEventListener("click", stopScan);
-  $("scanBtn").addEventListener("click", async function () {
-    if (typeof Html5Qrcode === "undefined") { $("scanHint").textContent = "Der Scanner konnte nicht geladen werden. Bitte Internetverbindung prüfen oder die Nummer eintippen."; return; }
+  async function stopScan() {
+    scanning = false;
+    if (mode === "native" && stream) { stream.getTracks().forEach(function (t) { t.stop(); }); }
+    if (mode === "h5" && h5) { try { await h5.stop(); } catch (e) { /* schon gestoppt */ } }
+    stream = null; track = null; mode = ""; zoomed = false; torchOn = false;
+    $("torchBtn").classList.remove("on"); $("zoomBtn").classList.remove("on");
+    $("torchBtn").textContent = "Licht an"; $("zoomBtn").textContent = "Zoom 2×";
+    camUI(false);
+  }
+  function gotCode(code) {
+    if (navigator.vibrate) { try { navigator.vibrate(80); } catch (e) { /* egal */ } }
+    stopScan();
+    $("scanHint").textContent = "Gescannt: " + code;
+    lookup(code); toTop();
+  }
+  // Zweimal gleich gelesen und Prüfziffer korrekt: dann gilt der Code
+  function consider(raw, format) {
+    const code = String(raw || "").replace(/\D/g, "");
+    const ok = format === "upc_e" ? /^\d{6,8}$/.test(code) : validGTIN(code);
+    if (!ok) return false;
+    if (code === lastCode) sameCount++; else { lastCode = code; sameCount = 1; }
+    if (sameCount >= 2) { gotCode(code); return true; }
+    return false;
+  }
+
+  async function nativeSupported() {
+    if (!("BarcodeDetector" in window)) return false;
+    try { const f = await BarcodeDetector.getSupportedFormats(); return f.indexOf("ean_13") !== -1; } catch (e) { return false; }
+  }
+
+  async function startNative() {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } } });
+    track = stream.getVideoTracks()[0];
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    try { if (caps.focusMode && caps.focusMode.indexOf("continuous") !== -1) await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] }); } catch (e) { /* egal */ }
+    $("torchBtn").hidden = !caps.torch;
+    $("zoomBtn").hidden = !(caps.zoom && caps.zoom.max >= 2);
+    const video = $("video");
+    video.srcObject = stream;
+    $("cam").hidden = false;
+    await video.play();
+    const detector = new BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e"] });
+    mode = "native"; scanning = true; lastCode = ""; sameCount = 0;
+    (async function tick() {
+      if (!scanning) return;
+      if (video.readyState >= 2) {
+        try {
+          const codes = await detector.detect(video);
+          for (let i = 0; i < codes.length; i++) { if (consider(codes[i].rawValue, codes[i].format)) return; }
+        } catch (e) { /* nächster Versuch */ }
+      }
+      setTimeout(tick, 60);
+    })();
+  }
+
+  async function startH5() {
+    await loadScript(LIB_SCAN);
     const F = Html5QrcodeSupportedFormats;
-    if (!scanner) {
-      scanner = new Html5Qrcode("reader", { formatsToSupport: [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E], experimentalFeatures: { useBarCodeDetectorIfSupported: true }, verbose: false });
-    }
-    $("reader").hidden = false; $("stopBtn").hidden = false; $("scanBtn").hidden = true;
-    $("scanHint").textContent = "Halte den Strichcode ruhig in den Rahmen.";
+    if (!h5) h5 = new Html5Qrcode("reader", { formatsToSupport: [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E], verbose: false });
+    $("reader").hidden = false;
+    mode = "h5"; lastCode = ""; sameCount = 0;
+    await h5.start({ facingMode: "environment" },
+      { fps: 15, qrbox: function (w, h) { return { width: Math.floor(Math.min(w * 0.85, 340)), height: Math.floor(Math.min(h * 0.45, 160)) }; } },
+      function (decoded) { if (scanning) consider(decoded, ""); },
+      function () { /* noch kein Code im Bild */ });
+    scanning = true;
+  }
+
+  $("scanBtn").addEventListener("click", async function () {
+    camUI(true);
+    $("scanHint").textContent = "Strichcode waagrecht in den Rahmen halten, etwa 10 bis 15 cm Abstand.";
     try {
-      await scanner.start({ facingMode: "environment" },
-        { fps: 10, qrbox: function (w, h) { return { width: Math.floor(Math.min(w * 0.85, 320)), height: Math.floor(Math.min(h * 0.45, 150)) }; } },
-        async function (decoded) {
-          if (!scanning) return;
-          if (navigator.vibrate) { try { navigator.vibrate(80); } catch (e) { /* egal */ } }
-          await stopScan();
-          $("ean").value = decoded;
-          $("scanHint").textContent = "Gescannt: " + decoded;
-          lookup(decoded);
-          $("ergebnis").scrollIntoView({ behavior: "smooth", block: "start" });
-        },
-        function () { /* noch kein Code im Bild */ });
-      scanning = true;
+      if (await nativeSupported()) await startNative(); else await startH5();
     } catch (e) {
       await stopScan();
       const msg = String(e && (e.name || e.message || e));
       $("scanHint").textContent = /NotAllowed|Permission/i.test(msg)
-        ? "Kamerazugriff wurde nicht erlaubt. In den Browser-Einstellungen die Kamera für diese Seite erlauben oder die Nummer eintippen."
-        : "Die Kamera konnte nicht gestartet werden. Bitte die Nummer eintippen.";
+        ? "Kamerazugriff wurde nicht erlaubt. In den Chrome-Einstellungen die Kamera für diese Seite erlauben, oder «Strichcode fotografieren» nutzen."
+        : "Die Kamera konnte nicht gestartet werden. Bitte «Strichcode fotografieren» nutzen oder die Nummer eintippen.";
+    }
+  });
+  $("stopBtn").addEventListener("click", stopScan);
+  $("torchBtn").addEventListener("click", async function () {
+    if (!track) return;
+    try { torchOn = !torchOn; await track.applyConstraints({ advanced: [{ torch: torchOn }] }); }
+    catch (e) { torchOn = false; }
+    this.classList.toggle("on", torchOn); this.textContent = torchOn ? "Licht aus" : "Licht an";
+  });
+  $("zoomBtn").addEventListener("click", async function () {
+    if (!track) return;
+    const caps = track.getCapabilities();
+    try { zoomed = !zoomed; await track.applyConstraints({ advanced: [{ zoom: zoomed ? Math.min(2, caps.zoom.max) : caps.zoom.min }] }); }
+    catch (e) { zoomed = false; }
+    this.classList.toggle("on", zoomed); this.textContent = zoomed ? "Zoom 1×" : "Zoom 2×";
+  });
+
+  // Foto vom Strichcode: nutzt die normale Kamera-App mit Blitz und Autofokus
+  $("barcodeFoto").addEventListener("change", async function () {
+    const file = this.files && this.files[0];
+    this.value = "";
+    if (!file) return;
+    await stopScan();
+    message("Strichcode wird gelesen", "Einen Moment bitte.");
+    let code = "";
+    try {
+      if (await nativeSupported()) {
+        const bmp = await createImageBitmap(file);
+        const det = new BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e"] });
+        const codes = await det.detect(bmp);
+        const hit = codes.find(function (c) { return c.format === "upc_e" || validGTIN(String(c.rawValue)); });
+        if (hit) code = String(hit.rawValue);
+      }
+      if (!code) {
+        await loadScript(LIB_SCAN);
+        const tmp = new Html5Qrcode("reader-file", { formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E], verbose: false });
+        const r = await tmp.scanFile(file, false);
+        if (validGTIN(String(r))) code = String(r);
+      }
+    } catch (e) { /* nicht erkannt */ }
+    if (code) { $("scanHint").textContent = "Gelesen: " + code; lookup(code); toTop(); }
+    else message("Kein Strichcode erkannt", "Bitte nochmals fotografieren: Strichcode gross und scharf im Bild, ohne Spiegelung. Oder die Nummer darunter eintippen.");
+  });
+
+  // ---------- Texterkennung der Zutatenliste ----------
+  let ocrWorker = null;
+  async function getWorker(onProgress) {
+    if (ocrWorker) return ocrWorker;
+    await loadScript(LIB_OCR);
+    ocrWorker = await Tesseract.createWorker("deu", 1, {
+      logger: function (m) { if (m && typeof m.progress === "number") onProgress(m.status, m.progress); }
+    });
+    await ocrWorker.setParameters({ preserve_interword_spaces: "1" });
+    return ocrWorker;
+  }
+
+  async function prepareImage(file) {
+    const bmp = await createImageBitmap(file);
+    const maxSide = 2400, minSide = 1400;
+    let scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+    if (Math.max(bmp.width, bmp.height) * scale < minSide) scale = minSide / Math.max(bmp.width, bmp.height);
+    const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    const ctx = c.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(bmp, 0, 0, w, h);
+    const img = ctx.getImageData(0, 0, w, h), d = img.data;
+    const hist = new Uint32Array(256);
+    for (let i = 0; i < d.length; i += 4) { const g = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) | 0; d[i] = g; hist[g]++; }
+    const total = w * h; let lo = 0, hi = 255, acc = 0;
+    for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc > total * 0.02) { lo = i; break; } }
+    acc = 0;
+    for (let i = 255; i >= 0; i--) { acc += hist[i]; if (acc > total * 0.02) { hi = i; break; } }
+    const span = Math.max(1, hi - lo);
+    for (let i = 0; i < d.length; i += 4) { let g = (d[i] - lo) * 255 / span; g = g < 0 ? 0 : g > 255 ? 255 : g; d[i] = d[i + 1] = d[i + 2] = g; }
+    ctx.putImageData(img, 0, 0);
+    return c;
+  }
+
+  function cleanOcr(raw) {
+    let t = raw.replace(/-\n(?=[a-zäöü])/g, "").replace(/\s*\n\s*/g, " ").replace(/\s{2,}/g, " ").trim();
+    // typische Verwechslungen bei E-Nummern: O statt 0, I/l statt 1
+    t = t.replace(/(^|[^A-Za-zÄÖÜäöü])([Ee])\s?-?\s?([0-9OoIl]{3,4})([a-f]?)(?=[^0-9A-Za-z]|$)/g, function (m, pre, e, num, suf) {
+      return pre + "E" + num.replace(/[Oo]/g, "0").replace(/[Il]/g, "1") + suf;
+    });
+    const start = t.search(/zutaten/i);
+    if (start !== -1) {
+      const rest = t.slice(start + 7);
+      const end = rest.search(/[il]?ngr[éeöo]dient|ingredienti|infos unter|aus nachhaltigem anbau|n[äa]hrwert|valeurs nutritives|mindestens haltbar|zu verbrauchen|aufbewahr|hergestellt|zubereitung|kann spuren/i);
+      t = t.slice(start, end === -1 ? undefined : start + 7 + end).trim();
+    }
+    return t;
+  }
+
+  $("ocrFoto").addEventListener("change", async function () {
+    const file = this.files && this.files[0];
+    this.value = "";
+    if (!file) return;
+    await stopScan();
+    toTop();
+    $("ergebnis").innerHTML = '<div class="verdict v-leer"><span class="tag" style="font-size:1.25rem">Zutatenliste wird gelesen</span><p id="ocrStatus">Texterkennung wird geladen. Beim ersten Mal dauert das etwas länger.</p><div class="progress"><div id="ocrBar"></div></div></div>';
+    const labels = { "loading tesseract core": "Texterkennung wird geladen", "loading language traineddata": "Deutsch wird geladen", "initializing api": "Wird vorbereitet", "recognizing text": "Text wird gelesen" };
+    try {
+      const canvas = await prepareImage(file);
+      const worker = await getWorker(function (status, p) {
+        const s = $("ocrStatus"), b = $("ocrBar");
+        if (s) s.textContent = (labels[status] || "Bitte warten") + " …";
+        if (b) b.style.width = Math.round(p * 100) + "%";
+      });
+      const result = await worker.recognize(canvas);
+      const text = cleanOcr(result.data.text || "");
+      if (text.replace(/[^A-Za-zÄÖÜäöü]/g, "").length < 15) {
+        message("Kein Text erkannt", "Bitte nochmals fotografieren: nur die Zutatenliste, gerade von vorne, scharf und ohne Spiegelung.", FALLBACK_BTNS);
+        return;
+      }
+      $("zutaten").value = text;
+      const item = { name: $("produkt").value.trim() || (pendingCode ? "" : "Fotografiertes Produkt"), code: pendingCode, text: text, source: "Per Foto gelesen. Bitte kurz mit der Packung vergleichen und Fehler unter «Zutaten selbst eingeben oder korrigieren» verbessern." };
+      const v = render(item);
+      if (v) { addHist(item, v); saveOwn(item); }
+      $("manuell").open = true;
+    } catch (e) {
+      message("Texterkennung fehlgeschlagen", "Die Texterkennung konnte nicht geladen werden. Beim ersten Mal braucht es eine Internetverbindung. Bitte nochmals versuchen oder die Zutaten selbst eingeben.", FALLBACK_BTNS);
     }
   });
 
   // ---------- Manuelle Eingabe ----------
   $("pruefen").addEventListener("click", function () {
-    const item = { name: $("produkt").value.trim(), text: $("zutaten").value };
+    const item = { name: $("produkt").value.trim(), code: pendingCode, text: $("zutaten").value.trim() };
+    if (!item.text) { message("Keine Zutaten", "Bitte zuerst die Zutatenliste eingeben."); toTop(); return; }
     const v = render(item);
-    if (v) { addHist(item, v); $("ergebnis").scrollIntoView({ behavior: "smooth", block: "start" }); }
-    else message("Keine Zutaten", "Bitte zuerst die Zutatenliste eingeben.");
+    if (v) { addHist(item, v); saveOwn(item); toTop(); }
   });
-  $("leeren").addEventListener("click", function () { $("produkt").value = ""; $("zutaten").value = ""; $("zutaten").focus(); });
+  $("leeren").addEventListener("click", function () { $("produkt").value = ""; $("zutaten").value = ""; setPending(""); $("zutaten").focus(); });
 
   // ---------- Start ----------
-  renderHist();
-  if (!loadHist().length) {
+  const hidden = document.createElement("div"); hidden.id = "reader-file"; hidden.hidden = true; document.body.appendChild(hidden);
+  renderHist(); renderOwnInfo();
+  if (!load(KEY_HIST, []).length) {
     render({ name: "Beispiel: Knorr Gemüse-Bouillon Pulver", text: "Speisesalz, Zucker, Hefeextrakt, Stärke, 6% Zwiebeln, natives Olivenöl extra, 1% Karotten, 0,9% Spinat, Lauch, Tomaten, Spargeln, Liebstöckel, Petersilie, Curcuma, Knoblauch, Basilikum, Muskatnuss." });
   } else {
-    message("Bereit", "Scanne einen Strichcode oder tippe auf ein Produkt im Verlauf.");
+    message("Bereit", "Scanne einen Strichcode, fotografiere eine Zutatenliste oder tippe auf ein Produkt im Verlauf.");
   }
 })();
 </script>
