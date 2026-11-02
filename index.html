@@ -124,6 +124,10 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
 .progress { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; }
 .progress > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
 .v-leer .row { margin-top: 8px; }
+.cropwrap { position: relative; touch-action: none; user-select: none; -webkit-user-select: none; border-radius: 10px; overflow: hidden; line-height: 0; }
+.cropwrap canvas { width: 100%; height: auto; display: block; }
+.v-med { background: var(--info-bg); border-color: var(--info); } .v-med .tag { color: var(--info); font-size: 1.35rem; }
+#cropBox { position: absolute; border: 3px solid #ff5a4f; background: rgba(255,90,79,.12); pointer-events: none; }
 </style>
 </head>
 <body>
@@ -135,21 +139,17 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
 
   <section class="panel" aria-labelledby="h-scan">
     <h2 id="h-scan">Produkt prüfen</h2>
-    <button class="btn primary big" id="scanBtn" type="button">Strichcode scannen</button>
+    <label class="btn primary big" for="barcodeFoto">Strichcode fotografieren</label>
+    <input class="sr-only" type="file" id="barcodeFoto" accept="image/*" capture="environment">
+    <button class="btn ghost" id="scanBtn" type="button">Live-Scanner</button>
     <div class="cam" id="cam" hidden><video id="video" playsinline muted></video><div class="frame"></div></div>
     <div id="reader" hidden></div>
     <div class="cam-tools" id="camTools" hidden>
       <button class="btn ghost" id="torchBtn" type="button" hidden>Licht an</button>
-      <button class="btn ghost" id="zoomBtn" type="button" hidden>Zoom 2×</button>
+      <button class="btn ghost" id="zoomBtn" type="button" hidden>Zoom 1×</button>
       <button class="btn ghost" id="stopBtn" type="button">Schliessen</button>
     </div>
-    <p class="hint" id="scanHint">Strichcode waagrecht in den Rahmen halten, etwa 10 bis 15 cm Abstand. Bei wenig Licht «Licht an» tippen.</p>
-    <div class="row">
-      <label class="btn ghost" for="barcodeFoto" style="flex:1">Strichcode fotografieren</label>
-      <label class="btn ghost" for="ocrFoto" style="flex:1">Zutatenliste fotografieren</label>
-    </div>
-    <input class="sr-only" type="file" id="barcodeFoto" accept="image/*" capture="environment">
-    <input class="sr-only" type="file" id="ocrFoto" accept="image/*" capture="environment">
+    <p class="hint" id="scanHint">Am zuverlässigsten: «Strichcode fotografieren». Der Live-Scanner ist schneller, braucht aber gutes Licht.</p>
     <label class="field" for="ean">Oder Nummer unter dem Strichcode eintippen
       <span class="code-row">
         <input type="text" id="ean" inputmode="numeric" autocomplete="off" placeholder="z. B. 8717163813706">
@@ -158,12 +158,31 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
     </label>
   </section>
 
+  <section class="panel" aria-labelledby="h-zut">
+    <h2 id="h-zut">Kein Strichcode oder nicht gefunden?</h2>
+    <p class="hint"><strong>Am genauesten mit Google Lens:</strong> Kamera-App oder Google Lens öffnen, Zutatenliste fotografieren, «Text» wählen, alles markieren und «Kopieren». Danach hier:</p>
+    <button class="btn primary" id="pasteBtn" type="button">Kopierten Text einfügen und prüfen</button>
+    <p class="hint">Oder die Texterkennung dieser App nutzen (etwas ungenauer):</p>
+    <label class="btn ghost" for="ocrFoto">Zutatenliste fotografieren</label>
+    <input class="sr-only" type="file" id="ocrFoto" accept="image/*" capture="environment">
+  </section>
+
+  <section class="panel" id="cropView" hidden aria-labelledby="h-crop">
+    <h2 id="h-crop">Zutatenliste markieren</h2>
+    <p class="hint">Mit dem Finger einen Rahmen nur um die deutsche Zutatenliste ziehen. Das verbessert die Erkennung stark.</p>
+    <div class="cropwrap" id="cropWrap"><canvas id="cropCanvas"></canvas><div id="cropBox" hidden></div></div>
+    <div class="row">
+      <button class="btn primary" id="cropGo" type="button" style="flex:1">Text lesen</button>
+      <button class="btn ghost" id="cropCancel" type="button">Abbrechen</button>
+    </div>
+  </section>
+
   <section id="ergebnis" aria-live="polite" style="display:flex;flex-direction:column;gap:12px"></section>
 
   <details class="panel" id="manuell">
     <summary>Zutaten selbst eingeben oder korrigieren</summary>
     <p class="hint" id="pendingHint">Falls ein Produkt nicht gefunden wird oder die Angaben unvollständig sind.</p>
-    <label class="field" for="produkt">Produkt
+    <label class="field" for="produkt">Produkt oder Medikament
       <input type="text" id="produkt" placeholder="z. B. Knorr Gemüse-Bouillon">
     </label>
     <label class="field" for="zutaten">Zutaten
@@ -204,7 +223,7 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
     <p>Kein Ersatz für ärztliche Beratung oder Ernährungsberatung. Die Verträglichkeit ist individuell. Geprüft wird nur die Zutatenliste.</p>
     <p>Produktdaten: <a href="https://openfoodfacts.org">Open Food Facts</a>, von Freiwilligen erfasst. Texterkennung: Tesseract, läuft direkt auf dem Handy. Bitte im Zweifel mit der Packung vergleichen.</p>
     <p>Grundlagen: <a href="https://discovery.dundee.ac.uk/ws/files/153439865/jjaf122.pdf">ECCO-Konsensus Ernährung bei CED (2025)</a>, IOIBD-Empfehlungen zu Zusatzstoffen, <a href="https://community.the-hospitalist.org/content/dietary-trial-shows-benefits-low-emulsifier-diet-crohns-disease">ADDapt-Studie zu Emulgatoren</a>.</p>
-    <p>Version 2</p>
+    <p>Version 4</p>
   </footer>
 </main>
 
@@ -279,13 +298,20 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
     { id: "verarbeitet", level: "info", label: "Hinweise auf starke Verarbeitung",
       why: "ECCO und AGA empfehlen möglichst frische, wenig verarbeitete Lebensmittel.",
       codes: ["620", "621", "622", "623", "624", "625", "627", "631", "635", "102", "104", "110", "122", "124", "129", "133", "150c", "150d", "151", "155"],
-      words: ["geschmacksverst[äa]rker", "~glutamat", "exhausteur de go[ûu]t", "farbstoff", "colorant"] }
+      words: ["geschmacksverst[äa]rker", "~glutamat", "exhausteur de go[ûu]t", "farbstoff", "colorant"] },
+    { id: "nsar", level: "med", label: "Entzündungshemmende Schmerzmittel (NSAR)",
+      why: "Bei Colitis ulcerosa zeigen neuere Studien kein klar erhöhtes Schubrisiko, die ECCO-Leitlinien empfehlen eine Abwägung im Einzelfall. Vor allem bei längerer oder regelmässiger Einnahme mit Ärztin oder Apotheke besprechen. Gele und Pflaster gelangen deutlich weniger ins Blut.",
+      codes: [], words: ["ibuprofen", "dexibuprofen", "diclofenac", "naproxen", "mefenamins[äa]ure", "acide m[ée]f[ée]namique", "ketoprofen", "dexketoprofen", "indometacin", "acemetacin", "piroxicam", "meloxicam", "lornoxicam", "etoricoxib", "celecoxib", "parecoxib", "algifor", "irfen", "brufen", "voltaren", "olfen", "inflamac", "ponstan", "proxen", "aleve" + E, "arcoxia", "celebrex"] },
+    { id: "ass", level: "med", label: "Acetylsalicylsäure (Aspirin)",
+      why: "In Schmerzdosis wie andere NSAR mit Ärztin oder Apotheke besprechen. Niedrig dosiertes Aspirin (z. B. 100 mg) für Herz oder Gefässe nie selbst absetzen.",
+      codes: [], words: ["acetylsalicyls[äa]ure", "acide ac[ée]tylsalicylique", "aspirin", "alcacyl", "ass\\s?\\d"] }
   ];
 
   const LEVEL = {
     rot: { pill: "p-rot", name: "Meiden" },
     orange: { pill: "p-orange", name: "Einschränken" },
-    info: { pill: "p-info", name: "Hinweis" }
+    info: { pill: "p-info", name: "Hinweis" },
+    med: { pill: "p-info", name: "Besprechen" }
   };
 
   const CODE_MAP = {};
@@ -371,7 +397,8 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
   const VERDICT = {
     gruen: { cls: "v-gruen", tag: "Passt", text: "Keine Zusatzstoffe oder Zutaten gefunden, die bei Colitis ulcerosa gemieden oder eingeschränkt werden sollten." },
     orange: { cls: "v-orange", tag: "Einschränken", text: "Enthält Zutaten, die man bei Colitis ulcerosa eher reduzieren sollte. Gelegentlich ist das meist kein Problem." },
-    rot: { cls: "v-rot", tag: "Meiden", text: "Enthält Zusatzstoffe, die nach aktuellen Empfehlungen gemieden werden sollten. Besser ein anderes Produkt wählen." }
+    rot: { cls: "v-rot", tag: "Meiden", text: "Enthält Zusatzstoffe, die nach aktuellen Empfehlungen gemieden werden sollten. Besser ein anderes Produkt wählen." },
+    med: { cls: "v-med", tag: "Mit Ärztin besprechen", text: "Enthält einen Wirkstoff, der bei chronisch entzündlichen Darmerkrankungen mit Ärztin oder Apotheke besprochen werden sollte. Das ist kein Verbot: Ob und wie lange er passt, ist eine individuelle Entscheidung." }
   };
 
   // item: {name, brand, code, image, text, extra, source}
@@ -379,7 +406,9 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
     const out = $("ergebnis");
     const full = (item.text || "") + (item.extra ? "\n" + item.extra : "");
     if (!full.trim()) { out.innerHTML = ""; return null; }
-    const res = evaluate(full);
+    const res = evaluate(full + (item.name ? "\n" + item.name : ""));
+    const meds = res.found.filter(function (f) { return f.rule.level === "med"; });
+    if (meds.length) res.verdict = "med";
     const v = VERDICT[res.verdict];
     let html = "";
     if (item.code || item.image) {
@@ -391,7 +420,7 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
     html += '<div class="verdict ' + v.cls + '"><span class="tag">' + v.tag + '</span>' +
       (!item.code && item.name ? '<span class="what">' + esc(item.name) + '</span>' : '') + '<p>' + v.text + '</p></div>';
     if (item.source) html += '<p class="source">' + esc(item.source) + '</p>';
-    const main = res.found.filter(function (f) { return f.rule.level !== "info"; });
+    const main = res.found.filter(function (f) { return f.rule.level === "rot" || f.rule.level === "orange"; });
     const info = res.found.filter(function (f) { return f.rule.level === "info"; });
     function list(items) {
       return '<ul class="findings">' + items.map(function (f) {
@@ -401,7 +430,8 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
           '<p>' + esc(f.rule.why) + '</p></li>';
       }).join("") + '</ul>';
     }
-    if (main.length) html += '<h2>Gefunden</h2>' + list(main);
+    if (meds.length) html += '<h2>Wirkstoffe</h2>' + list(meds);
+    if (main.length) html += '<h2>' + (meds.length ? 'Zusatzstoffe' : 'Gefunden') + '</h2>' + list(main);
     if (info.length) html += '<h2>Gut zu wissen</h2>' + list(info);
     if (item.text) html += '<div class="panel"><h3>Zutaten</h3><p class="ingr">' + esc(item.text) + '</p></div>';
     else if (item.code) html += '<p class="hint">In der Datenbank fehlt die Zutatenliste, bewertet wurden nur die erfassten Zusatzstoffe. Für ein vollständiges Ergebnis die Zutatenliste fotografieren.</p>';
@@ -412,10 +442,11 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
   function message(title, text, extraHtml) {
     $("ergebnis").innerHTML = '<div class="verdict v-leer"><span class="tag" style="font-size:1.25rem">' + esc(title) + '</span><p>' + esc(text) + '</p>' + (extraHtml || "") + '</div>';
   }
-  const FALLBACK_BTNS = '<div class="row"><label class="btn primary" for="ocrFoto" style="flex:1">Zutatenliste fotografieren</label><button class="btn ghost" type="button" data-act="manuell" style="flex:1">Selbst eingeben</button></div>';
+  const FALLBACK_BTNS = '<div class="row"><button class="btn primary" type="button" data-act="lens" style="flex:1">Text aus Google Lens einfügen</button><label class="btn ghost" for="ocrFoto" style="flex:1">Zutatenliste fotografieren</label><button class="btn ghost" type="button" data-act="manuell" style="flex:1">Selbst eingeben</button></div>';
   $("ergebnis").addEventListener("click", function (ev) {
     const b = ev.target.closest('[data-act="manuell"]');
     if (b) { $("manuell").open = true; $("zutaten").focus(); }
+    if (ev.target.closest('[data-act="lens"]')) pasteAndCheck();
   });
 
   // ---------- Speicher ----------
@@ -435,7 +466,7 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
     const ul = $("verlauf");
     $("verlaufLeeren").hidden = arr.length === 0;
     if (!arr.length) { ul.innerHTML = '<li class="hint">Geprüfte Produkte erscheinen hier. Gespeichert wird nur auf diesem Handy.</li>'; return; }
-    const pills = { gruen: ["p-gruen", "Passt"], orange: ["p-orange", "Einschränken"], rot: ["p-rot", "Meiden"] };
+    const pills = { gruen: ["p-gruen", "Passt"], orange: ["p-orange", "Einschränken"], rot: ["p-rot", "Meiden"], med: ["p-info", "Besprechen"] };
     ul.innerHTML = arr.map(function (h, i) {
       const p = pills[h.verdict] || pills.gruen;
       return '<li><button type="button" class="hist-item" data-i="' + i + '"><span>' + esc(h.name) +
@@ -521,6 +552,11 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
       const v = render(item); if (v) addHist(item, v);
       return;
     }
+    if (/^7680\d{9}$/.test(code)) {
+      setPending(code, "");
+      message("Das ist ein Medikament", "Strichcodes, die mit 7680 beginnen, gehören zu Medikamenten in der Schweiz. Die App kann einen Hinweis zum Wirkstoff geben: Packungsaufschrift mit Google Lens kopieren, fotografieren oder den Namen eintippen, zum Beispiel «Algifor».", FALLBACK_BTNS);
+      return;
+    }
     message("Suche läuft", "Produkt " + code + " wird in der Datenbank gesucht.");
     let j;
     try {
@@ -580,7 +616,7 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
     if (mode === "h5" && h5) { try { await h5.stop(); } catch (e) { /* schon gestoppt */ } }
     stream = null; track = null; mode = ""; zoomed = false; torchOn = false;
     $("torchBtn").classList.remove("on"); $("zoomBtn").classList.remove("on");
-    $("torchBtn").textContent = "Licht an"; $("zoomBtn").textContent = "Zoom 2×";
+    $("torchBtn").textContent = "Licht an"; $("zoomBtn").textContent = "Zoom 1×";
     camUI(false);
   }
   function gotCode(code) {
@@ -604,17 +640,59 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
     try { const f = await BarcodeDetector.getSupportedFormats(); return f.indexOf("ean_13") !== -1; } catch (e) { return false; }
   }
 
+  async function openCam(deviceId) {
+    const v = deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: "environment" } };
+    v.width = { ideal: 1920 }; v.height = { ideal: 1080 };
+    return navigator.mediaDevices.getUserMedia({ audio: false, video: v });
+  }
+  // Hauptkamera wählen: Weitwinkel- oder Makrolinsen stellen oft nicht scharf
+  async function pickMainCamera() {
+    try {
+      const devs = (await navigator.mediaDevices.enumerateDevices()).filter(function (d) { return d.kind === "videoinput"; });
+      const backs = devs.filter(function (d) { return /back|rück|rear|environment/i.test(d.label); });
+      if (!backs.length) return null;
+      const main = backs.find(function (d) { return /camera2 0|camera 0|\b0\b/.test(d.label); }) || backs[0];
+      return main.deviceId || null;
+    } catch (e) { return null; }
+  }
+  async function applyFocus(track, point) {
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    const modes = caps.focusMode || [];
+    try {
+      if (point && modes.indexOf("single-shot") !== -1) {
+        await track.applyConstraints({ advanced: [{ focusMode: "single-shot", pointsOfInterest: [point] }] });
+        setTimeout(function () { if (modes.indexOf("continuous") !== -1 && track.readyState === "live") track.applyConstraints({ advanced: [{ focusMode: "continuous" }] }).catch(function () {}); }, 1500);
+      } else if (modes.indexOf("continuous") !== -1) {
+        await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] });
+      }
+    } catch (e) { /* Gerät unterstützt es nicht */ }
+  }
+
   async function startNative() {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } } });
+    stream = await openCam(null);
+    const mainId = await pickMainCamera();
+    const curId = stream.getVideoTracks()[0].getSettings().deviceId;
+    if (mainId && mainId !== curId) {
+      stream.getTracks().forEach(function (t) { t.stop(); });
+      try { stream = await openCam(mainId); } catch (e) { stream = await openCam(null); }
+    }
     track = stream.getVideoTracks()[0];
     const caps = track.getCapabilities ? track.getCapabilities() : {};
-    try { if (caps.focusMode && caps.focusMode.indexOf("continuous") !== -1) await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] }); } catch (e) { /* egal */ }
+    await applyFocus(track, null);
     $("torchBtn").hidden = !caps.torch;
-    $("zoomBtn").hidden = !(caps.zoom && caps.zoom.max >= 2);
+    if (caps.zoom && caps.zoom.max >= 2) {
+      try { await track.applyConstraints({ advanced: [{ zoom: 2 }] }); zoomed = true; } catch (e) { zoomed = false; }
+      $("zoomBtn").hidden = false;
+      $("zoomBtn").textContent = zoomed ? "Zoom 1×" : "Zoom 2×";
+      $("zoomBtn").classList.toggle("on", zoomed);
+    }
     const video = $("video");
     video.srcObject = stream;
     $("cam").hidden = false;
     await video.play();
+    $("scanHint").textContent = zoomed
+      ? "Etwa 20 bis 25 cm Abstand halten, der Zoom ist schon an. Ist es unscharf, aufs Bild tippen."
+      : "Etwa 15 bis 20 cm Abstand halten. Ist es unscharf, aufs Bild tippen.";
     const detector = new BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e"] });
     mode = "native"; scanning = true; lastCode = ""; sameCount = 0;
     (async function tick() {
@@ -628,6 +706,12 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
       setTimeout(tick, 60);
     })();
   }
+  $("video").addEventListener("click", function (ev) {
+    if (!track) return;
+    const r = this.getBoundingClientRect();
+    applyFocus(track, { x: (ev.clientX - r.left) / r.width, y: (ev.clientY - r.top) / r.height });
+    $("scanHint").textContent = "Stelle scharf …";
+  });
 
   async function startH5() {
     await loadScript(LIB_SCAN);
@@ -644,7 +728,7 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
 
   $("scanBtn").addEventListener("click", async function () {
     camUI(true);
-    $("scanHint").textContent = "Strichcode waagrecht in den Rahmen halten, etwa 10 bis 15 cm Abstand.";
+    $("scanHint").textContent = "Kamera startet …";
     try {
       if (await nativeSupported()) await startNative(); else await startH5();
     } catch (e) {
@@ -697,34 +781,64 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
     else message("Kein Strichcode erkannt", "Bitte nochmals fotografieren: Strichcode gross und scharf im Bild, ohne Spiegelung. Oder die Nummer darunter eintippen.");
   });
 
+  // ---------- Text aus Google Lens einfügen ----------
+  function checkText(text, source) {
+    const item = { name: $("produkt").value.trim() || (pendingCode ? "" : "Eingefügtes Produkt"), code: pendingCode, text: text, source: source };
+    $("zutaten").value = text;
+    const v = render(item);
+    if (v) { addHist(item, v); saveOwn(item); }
+    toTop();
+  }
+  async function pasteAndCheck() {
+    let text = "";
+    try { text = (await navigator.clipboard.readText()) || ""; } catch (e) { text = ""; }
+    text = cleanOcr(text);
+    if (text.replace(/[^A-Za-zÄÖÜäöü]/g, "").length < 10) {
+      $("manuell").open = true;
+      $("zutaten").focus();
+      message("Nichts zum Einfügen gefunden", "Die App konnte den kopierten Text nicht lesen. Bitte unten ins Feld «Zutaten» lange drücken, «Einfügen» wählen und dann «Prüfen» tippen.");
+      return;
+    }
+    checkText(text, "Aus kopiertem Text. Bitte kurz mit der Packung vergleichen.");
+  }
+  $("pasteBtn").addEventListener("click", pasteAndCheck);
+
   // ---------- Texterkennung der Zutatenliste ----------
-  let ocrWorker = null;
-  async function getWorker(onProgress) {
-    if (ocrWorker) return ocrWorker;
-    await loadScript(LIB_OCR);
-    ocrWorker = await Tesseract.createWorker("deu", 1, {
-      logger: function (m) { if (m && typeof m.progress === "number") onProgress(m.status, m.progress); }
-    });
-    await ocrWorker.setParameters({ preserve_interword_spaces: "1" });
-    return ocrWorker;
+  let ocrWorker = null, ocrLoading = null, cropBmp = null, cropSel = null, ocrProgress = null;
+  function getWorker() {
+    if (ocrWorker) return Promise.resolve(ocrWorker);
+    if (ocrLoading) return ocrLoading;
+    ocrLoading = (async function () {
+      await loadScript(LIB_OCR);
+      const w = await Tesseract.createWorker("deu", 1, {
+        logger: function (m) { if (ocrProgress && m && typeof m.progress === "number") ocrProgress(m.status, m.progress); }
+      });
+      await w.setParameters({ tessedit_pageseg_mode: "3", preserve_interword_spaces: "1" });
+      ocrWorker = w;
+      return w;
+    })();
+    ocrLoading.catch(function () { ocrLoading = null; });
+    return ocrLoading;
   }
 
-  async function prepareImage(file) {
-    const bmp = await createImageBitmap(file);
-    const maxSide = 2400, minSide = 1400;
-    let scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
-    if (Math.max(bmp.width, bmp.height) * scale < minSide) scale = minSide / Math.max(bmp.width, bmp.height);
-    const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+  // Ausschnitt in voller Auflösung, bei kleiner Schrift hochskaliert, Graustufen mit leichtem Kontrast
+  function prepareImage(bmp, sel) {
+    const sx = sel ? sel.x : 0, sy = sel ? sel.y : 0, sw = sel ? sel.w : bmp.width, sh = sel ? sel.h : bmp.height;
+    let scale = 1;
+    if (sw < 1600) scale = 1600 / sw;
+    if (sw * scale > 3200) scale = 3200 / sw;
+    const w = Math.round(sw * scale), h = Math.round(sh * scale);
     const c = document.createElement("canvas"); c.width = w; c.height = h;
     const ctx = c.getContext("2d", { willReadFrequently: true });
-    ctx.drawImage(bmp, 0, 0, w, h);
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(bmp, sx, sy, sw, sh, 0, 0, w, h);
     const img = ctx.getImageData(0, 0, w, h), d = img.data;
     const hist = new Uint32Array(256);
     for (let i = 0; i < d.length; i += 4) { const g = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) | 0; d[i] = g; hist[g]++; }
     const total = w * h; let lo = 0, hi = 255, acc = 0;
-    for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc > total * 0.02) { lo = i; break; } }
+    for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc > total * 0.01) { lo = i; break; } }
     acc = 0;
-    for (let i = 255; i >= 0; i--) { acc += hist[i]; if (acc > total * 0.02) { hi = i; break; } }
+    for (let i = 255; i >= 0; i--) { acc += hist[i]; if (acc > total * 0.01) { hi = i; break; } }
     const span = Math.max(1, hi - lo);
     for (let i = 0; i < d.length; i += 4) { let g = (d[i] - lo) * 255 / span; g = g < 0 ? 0 : g > 255 ? 255 : g; d[i] = d[i + 1] = d[i + 2] = g; }
     ctx.putImageData(img, 0, 0);
@@ -732,7 +846,7 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
   }
 
   function cleanOcr(raw) {
-    let t = raw.replace(/-\n(?=[a-zäöü])/g, "").replace(/\s*\n\s*/g, " ").replace(/\s{2,}/g, " ").trim();
+    let t = String(raw || "").replace(/-\n(?=[a-zäöü])/g, "").replace(/\s*\n\s*/g, " ").replace(/\s{2,}/g, " ").trim();
     // typische Verwechslungen bei E-Nummern: O statt 0, I/l statt 1
     t = t.replace(/(^|[^A-Za-zÄÖÜäöü])([Ee])\s?-?\s?([0-9OoIl]{3,4})([a-f]?)(?=[^0-9A-Za-z]|$)/g, function (m, pre, e, num, suf) {
       return pre + "E" + num.replace(/[Oo]/g, "0").replace(/[Il]/g, "1") + suf;
@@ -746,40 +860,85 @@ details.panel summary { cursor: pointer; font-family: var(--font-display); font-
     return t;
   }
 
+  // Schritt 1: Foto wählen, dann Ausschnitt markieren
   $("ocrFoto").addEventListener("change", async function () {
     const file = this.files && this.files[0];
     this.value = "";
     if (!file) return;
     await stopScan();
+    try { cropBmp = await createImageBitmap(file); } catch (e) { message("Bild nicht lesbar", "Bitte ein anderes Foto wählen."); toTop(); return; }
+    cropSel = null;
+    const cv = $("cropCanvas");
+    const dispW = Math.min(1200, cropBmp.width);
+    cv.width = dispW; cv.height = Math.round(cropBmp.height * dispW / cropBmp.width);
+    cv.getContext("2d").drawImage(cropBmp, 0, 0, cv.width, cv.height);
+    $("cropBox").hidden = true;
+    $("cropGo").textContent = "Ganzes Bild lesen";
+    $("cropView").hidden = false;
+    $("cropView").scrollIntoView({ behavior: "smooth", block: "start" });
+    getWorker().catch(function () {});  // Texterkennung schon im Hintergrund laden
+  });
+
+  (function cropDrag() {
+    const wrap = $("cropWrap"), box = $("cropBox");
+    let start = null;
+    function pos(ev) { const r = wrap.getBoundingClientRect(); return { x: Math.max(0, Math.min(r.width, ev.clientX - r.left)), y: Math.max(0, Math.min(r.height, ev.clientY - r.top)), w: r.width, h: r.height }; }
+    function draw(a, b) {
+      const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y), w = Math.abs(a.x - b.x), h = Math.abs(a.y - b.y);
+      box.style.left = x + "px"; box.style.top = y + "px"; box.style.width = w + "px"; box.style.height = h + "px"; box.hidden = false;
+      return { x: x / a.w, y: y / a.h, w: w / a.w, h: h / a.h };
+    }
+    wrap.addEventListener("pointerdown", function (ev) { start = pos(ev); wrap.setPointerCapture(ev.pointerId); ev.preventDefault(); });
+    wrap.addEventListener("pointermove", function (ev) { if (start) draw(start, pos(ev)); });
+    wrap.addEventListener("pointerup", function (ev) {
+      if (!start) return;
+      const f = draw(start, pos(ev)); start = null;
+      if (f.w < 0.05 || f.h < 0.03 || !cropBmp) { box.hidden = true; cropSel = null; $("cropGo").textContent = "Ganzes Bild lesen"; return; }
+      cropSel = { x: Math.round(f.x * cropBmp.width), y: Math.round(f.y * cropBmp.height), w: Math.round(f.w * cropBmp.width), h: Math.round(f.h * cropBmp.height) };
+      $("cropGo").textContent = "Markierten Text lesen";
+    });
+  })();
+
+  $("cropCancel").addEventListener("click", function () { $("cropView").hidden = true; cropBmp = null; });
+
+  // Schritt 2: Text lesen
+  $("cropGo").addEventListener("click", async function () {
+    if (!cropBmp) return;
+    $("cropView").hidden = true;
     toTop();
     $("ergebnis").innerHTML = '<div class="verdict v-leer"><span class="tag" style="font-size:1.25rem">Zutatenliste wird gelesen</span><p id="ocrStatus">Texterkennung wird geladen. Beim ersten Mal dauert das etwas länger.</p><div class="progress"><div id="ocrBar"></div></div></div>';
     const labels = { "loading tesseract core": "Texterkennung wird geladen", "loading language traineddata": "Deutsch wird geladen", "initializing api": "Wird vorbereitet", "recognizing text": "Text wird gelesen" };
     try {
-      const canvas = await prepareImage(file);
-      const worker = await getWorker(function (status, p) {
+      ocrProgress = function (status, p) {
         const s = $("ocrStatus"), b = $("ocrBar");
         if (s) s.textContent = (labels[status] || "Bitte warten") + " …";
         if (b) b.style.width = Math.round(p * 100) + "%";
-      });
-      const result = await worker.recognize(canvas);
+      };
+      const canvas = prepareImage(cropBmp, cropSel);
+      const worker = await getWorker();
+      const result = await worker.recognize(canvas, {}, { text: true });
+      const s = $("ocrStatus"); if (s) s.textContent = "Fertig";
       const text = cleanOcr(result.data.text || "");
+      const conf = Math.round(result.data.confidence || 0);
       if (text.replace(/[^A-Za-zÄÖÜäöü]/g, "").length < 15) {
-        message("Kein Text erkannt", "Bitte nochmals fotografieren: nur die Zutatenliste, gerade von vorne, scharf und ohne Spiegelung.", FALLBACK_BTNS);
+        message("Kein Text erkannt", "Bitte nochmals fotografieren: gerade von vorne, scharf, ohne Spiegelung, und einen Rahmen nur um die Zutatenliste ziehen. Genauer geht es mit Google Lens.", FALLBACK_BTNS);
         return;
       }
-      $("zutaten").value = text;
-      const item = { name: $("produkt").value.trim() || (pendingCode ? "" : "Fotografiertes Produkt"), code: pendingCode, text: text, source: "Per Foto gelesen. Bitte kurz mit der Packung vergleichen und Fehler unter «Zutaten selbst eingeben oder korrigieren» verbessern." };
-      const v = render(item);
-      if (v) { addHist(item, v); saveOwn(item); }
+      const note = conf < 50
+        ? "Per Foto gelesen, die Erkennung war unsicher. Bitte unbedingt mit der Packung vergleichen und Fehler unter «Zutaten selbst eingeben oder korrigieren» verbessern, oder Google Lens nutzen."
+        : "Per Foto gelesen. Bitte kurz mit der Packung vergleichen und Fehler unter «Zutaten selbst eingeben oder korrigieren» verbessern.";
+      checkText(text, note);
       $("manuell").open = true;
     } catch (e) {
-      message("Texterkennung fehlgeschlagen", "Die Texterkennung konnte nicht geladen werden. Beim ersten Mal braucht es eine Internetverbindung. Bitte nochmals versuchen oder die Zutaten selbst eingeben.", FALLBACK_BTNS);
-    }
+      message("Texterkennung fehlgeschlagen", "Die Texterkennung konnte nicht geladen werden. Beim ersten Mal braucht es eine Internetverbindung. Bitte nochmals versuchen oder Google Lens nutzen.", FALLBACK_BTNS);
+    } finally { cropBmp = null; ocrProgress = null; }
   });
 
+  // Fortschritt während des Ladens anzeigen
   // ---------- Manuelle Eingabe ----------
   $("pruefen").addEventListener("click", function () {
     const item = { name: $("produkt").value.trim(), code: pendingCode, text: $("zutaten").value.trim() };
+    if (!item.text && item.name) item.text = item.name;
     if (!item.text) { message("Keine Zutaten", "Bitte zuerst die Zutatenliste eingeben."); toTop(); return; }
     const v = render(item);
     if (v) { addHist(item, v); saveOwn(item); toTop(); }
